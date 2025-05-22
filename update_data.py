@@ -76,6 +76,7 @@ def update_data():
         ('baseball_stats.py', 'Baseball Reference and Statcast data fetch'),
         ('src/merge_xwoba.py', 'xwOBA data merge'),
         ('src/integrate_projections.py', 'Projections integration'),
+        ('team_stats_aggregator.py', 'Weekly team stats aggregation'),
         ('scripts/calculate_team_stats.py', 'Team stats calculation'),
         ('scripts/calculate_hitter_impacts.py', 'Hitter impact calculations'),
         ('scripts/calculate_incremental_points.py', 'Pitcher impact calculations')

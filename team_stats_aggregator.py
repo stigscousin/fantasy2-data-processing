@@ -55,6 +55,7 @@ def aggregate_team_stats(league: League, start_week: int = 1, end_week: int = No
         }
     
     # Process each week's box scores
+    all_weeks = []
     for week in range(start_week, end_week + 1):
         # --- NEW: Per-week stats dict ---
         week_team_stats = {}
@@ -186,7 +187,6 @@ def aggregate_team_stats(league: League, start_week: int = 1, end_week: int = No
                         week_team_stats[team_id]['OPS'] += weekly_ops * weekly_ab
                         week_team_stats[team_id]['OPS_AB'] += weekly_ab
                     processed_teams.add(team_id)
-        # --- Save per-week stats to DB ---
         # Calculate OPS as a rate for each team for the week
         for team_id in week_team_stats:
             ops_ab = week_team_stats[team_id]['OPS_AB']
@@ -198,12 +198,15 @@ def aggregate_team_stats(league: League, start_week: int = 1, end_week: int = No
         week_df['team_id'] = week_df.index
         week_df['team_name'] = week_df['team_name']
         week_df['week'] = week
-        save_team_stats_by_week_to_db(week_df, week)
+        all_weeks.append(week_df)
         # --- Accumulate into overall stats ---
         for team_id in week_team_stats:
             for stat in week_team_stats[team_id]:
                 if stat in team_stats[team_id]:
                     team_stats[team_id][stat] += week_team_stats[team_id][stat]
+    # After all weeks, concatenate and write to DB
+    all_weeks_df = pd.concat(all_weeks, ignore_index=True)
+    save_team_stats_by_week_to_db(all_weeks_df)
     
     # Convert to DataFrame
     df = pd.DataFrame.from_dict(team_stats, orient='index')
@@ -389,24 +392,22 @@ def save_team_stats_to_db(df: pd.DataFrame):
         print(f"Error saving team stats to database: {e}")
         raise
 
-def save_team_stats_by_week_to_db(df: pd.DataFrame, week: int):
+def save_team_stats_by_week_to_db(df: pd.DataFrame, week: int = None):
     """
-    Save team statistics for a single week to the SQLite database.
+    Save team statistics for all weeks to the database, replacing the table.
     Args:
-        df: DataFrame with team statistics for one week
-        week: The matchup week number
+        df: DataFrame with team statistics for all weeks
     """
     try:
         db_url = os.environ['DATABASE_URL']
         if db_url.startswith('postgres://'):
             db_url = db_url.replace('postgres://', 'postgresql://', 1)
         engine = create_engine(db_url)
-        df['week'] = week
         df.columns = [col.lower() for col in df.columns]
-        df.to_sql('team_stats_by_week', engine, if_exists='append', index=False)
-        print(f"Successfully saved team stats for week {week} to database")
+        df.to_sql('team_stats_by_week', engine, if_exists='replace', index=False)
+        print(f"Successfully saved all team stats by week to database")
     except Exception as e:
-        print(f"Error saving team stats for week {week} to database: {e}")
+        print(f"Error saving team stats by week to database: {e}")
         raise
 
 def main():

@@ -148,8 +148,8 @@ def download_projections():
     chrome_options.add_argument('--disable-dev-shm-usage')
     chrome_options.add_argument('--window-size=1920,1080')
     # Use a unique temp directory for user-data-dir
-    user_data_dir = tempfile.mkdtemp()
-    chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
+    # user_data_dir = tempfile.mkdtemp()
+    # chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
     
     # Set download directory
     download_dir = os.path.join(os.getcwd(), 'projections')

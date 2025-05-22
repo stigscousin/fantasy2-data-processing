@@ -6,10 +6,14 @@ import argparse
 from .roster_utils import select_optimal_roster
 from sqlalchemy import create_engine, text
 import os
+from dotenv import load_dotenv
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Load environment variables from .env file
+load_dotenv()
 
 def calculate_points(df, return_category_points=False):
     """Calculate points for each team based on their stats."""

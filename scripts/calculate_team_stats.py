@@ -6,6 +6,7 @@ from scripts.roster_utils import select_optimal_roster
 from sqlalchemy import create_engine
 import os
 from sqlalchemy import text
+from dotenv import load_dotenv
 
 # Set up logging
 logging.basicConfig(
@@ -15,6 +16,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # All stat columns are now lowercase (e.g., 'proj_r', not 'proj_R')
+
+load_dotenv()
 
 def calculate_team_stats():
     """Calculate team stats by aggregating individual player projections."""

@@ -69,7 +69,10 @@ def update_data():
     # Define the sequence of scripts to run
     scripts = [
         ('src/fetch_espn_stats.py', 'ESPN stats fetch'),
-        ('download_projections.py', 'FanGraphs projections download'),
+    ]
+    if not skip_fangraphs:
+        scripts.append(('download_projections.py', 'FanGraphs projections download'))
+    scripts += [
         ('baseball_stats.py', 'Baseball Reference and Statcast data fetch'),
         ('src/merge_xwoba.py', 'xwOBA data merge'),
         ('src/integrate_projections.py', 'Projections integration'),

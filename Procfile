@@ -1,1 +1,1 @@
-worker: python update_data.py 
+web: node server.js 

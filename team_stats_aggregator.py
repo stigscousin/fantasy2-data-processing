@@ -423,6 +423,8 @@ def main():
     
     # Initialize league with credentials
     league = League(league_id=league_id, year=year, espn_s2=espn_s2, swid=swid)
+    from espn_api.baseball.box_score import H2HCategoryBoxScore
+    league._box_score_class = H2HCategoryBoxScore
     
     # Aggregate team stats
     df = aggregate_team_stats(league)

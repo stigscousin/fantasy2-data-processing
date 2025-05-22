@@ -22,7 +22,10 @@ load_dotenv()
 def calculate_team_stats():
     """Calculate team stats by aggregating individual player projections."""
     # Connect to the database
-    engine = create_engine(os.environ['DATABASE_URL'])
+    db_url = os.environ['DATABASE_URL']
+    if db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://', 1)
+    engine = create_engine(db_url)
     
     # Get all hitters with their projections
     logger.info("Fetching hitter projections...")

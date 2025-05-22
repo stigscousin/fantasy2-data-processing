@@ -64,7 +64,10 @@ def calculate_points(df, return_category_points=False):
     return points
 
 def main():
-    engine = create_engine(os.environ['DATABASE_URL'])
+    db_url = os.environ['DATABASE_URL']
+    if db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://', 1)
+    engine = create_engine(db_url)
     # Drop and recreate hitter_impacts table
     conn = engine.connect()
     conn.execute(text("DROP TABLE IF EXISTS hitter_impacts"))

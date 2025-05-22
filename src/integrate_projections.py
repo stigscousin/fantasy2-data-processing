@@ -235,7 +235,10 @@ def calculate_current_pr_values(stats_df: pd.DataFrame, is_hitter: bool) -> pd.D
 
 def integrate_projections():
     # Connect to the database
-    engine = create_engine(os.environ['DATABASE_URL'])
+    db_url = os.environ['DATABASE_URL']
+    if db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://', 1)
+    engine = create_engine(db_url)
     
     # Read the projection files
     logger.info("Reading projection files...")

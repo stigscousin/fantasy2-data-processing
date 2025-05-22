@@ -22,7 +22,10 @@ def truncate_repeated_name(name):
     return name
 
 def main():
-    engine = create_engine(os.environ['DATABASE_URL'])
+    db_url = os.environ['DATABASE_URL']
+    if db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://', 1)
+    engine = create_engine(db_url)
     df = pd.read_sql('SELECT rowid, team_name FROM team_stats', engine)
     
     cleaned = []

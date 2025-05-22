@@ -45,7 +45,10 @@ def calculate_points(stats_df, return_category_points=False):
     return team_points
 
 def main():
-    engine = create_engine(os.environ['DATABASE_URL'])
+    db_url = os.environ['DATABASE_URL']
+    if db_url.startswith('postgres://'):
+        db_url = db_url.replace('postgres://', 'postgresql://', 1)
+    engine = create_engine(db_url)
     # Load all teams' projected stats
     # We need to calculate projected stats by summing up all pitchers' projected stats for each team
     projected_stats_query = """

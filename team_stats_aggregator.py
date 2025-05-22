@@ -402,6 +402,7 @@ def save_team_stats_by_week_to_db(df: pd.DataFrame, week: int):
             db_url = db_url.replace('postgres://', 'postgresql://', 1)
         engine = create_engine(db_url)
         df['week'] = week
+        df.columns = [col.lower() for col in df.columns]
         df.to_sql('team_stats_by_week', engine, if_exists='append', index=False)
         print(f"Successfully saved team stats for week {week} to database")
     except Exception as e:

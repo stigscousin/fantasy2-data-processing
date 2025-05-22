@@ -1,0 +1,23 @@
+name: Espn API Integration Test
+on:
+  schedule:
+  # run once a day
+    - cron:  '0 0 * * *'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.8'
+    - name: Install dependencies
+      run: python setup.py install
+    - name: Test integration
+      run: |
+        python3 setup.py nosetests --tests tests/football/integration/
+        python3 setup.py nosetests --tests tests/basketball/integration/
+        python3 setup.py nosetests --tests tests/hockey/integration/
+        python3 setup.py nosetests --tests tests/baseball/integration/

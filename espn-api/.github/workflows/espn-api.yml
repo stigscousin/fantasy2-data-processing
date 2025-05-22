@@ -1,0 +1,24 @@
+name: Espn API
+on:
+  push:
+    branches:
+      - master  
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.8'
+    - name: Install dependencies
+      run: python setup.py install
+    - name: Test with nosetests
+      run: python3 setup.py nosetests
+    - name: Upload coverage to Codecov  
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }} # required

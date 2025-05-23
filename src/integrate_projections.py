@@ -725,33 +725,39 @@ def integrate_projections():
     
     # Clean up column names for pitchers
     merged_pitcher_stats = merged_pitcher_stats.loc[:, ~merged_pitcher_stats.columns.str.endswith(('_x', '_y'))]
-    
+    # Lowercase all column names to avoid case mismatch
+    merged_pitcher_stats.columns = [col.lower() for col in merged_pitcher_stats.columns]
     # Remove any duplicate name columns
     name_cols = [col for col in merged_pitcher_stats.columns if col.startswith('name_')]
     if len(name_cols) > 1:
         merged_pitcher_stats = merged_pitcher_stats.drop(columns=name_cols[1:])
-    
     # Remove any duplicate team columns
     team_cols = [col for col in merged_pitcher_stats.columns if col.startswith('team_')]
     if len(team_cols) > 1:
         merged_pitcher_stats = merged_pitcher_stats.drop(columns=team_cols[1:])
-    
     # Drop the clean_name column as it's not in the database schema
     if 'clean_name' in merged_pitcher_stats.columns:
         merged_pitcher_stats = merged_pitcher_stats.drop(columns=['clean_name'])
-    
     # Drop any remaining columns with _proj suffix that aren't in the database schema
     proj_suffix_cols = [col for col in merged_pitcher_stats.columns if col.endswith('_proj')]
     merged_pitcher_stats = merged_pitcher_stats.drop(columns=proj_suffix_cols)
-    
     # Save the updated pitcher stats
     logger.info("Saving updated pitcher stats...")
-    merged_pitcher_stats.to_csv('data/pitcher_stats.csv', index=False)
-    
+    logger.info(f"Final merged_pitcher_stats columns: {list(merged_pitcher_stats.columns)}")
+    logger.info(f"Pitcher DataFrame dtypes: {merged_pitcher_stats.dtypes}")
+    logger.info(f"Sample merged_pitcher_stats row: {merged_pitcher_stats.head(1).to_dict()}")
+    logger.info(f"Number of rows to write: {len(merged_pitcher_stats)}")
+    # Convert all non-string columns to numeric and fill NaN
+    for col in merged_pitcher_stats.columns:
+        if merged_pitcher_stats[col].dtype == 'O' and col not in ['name', 'team', 'position', 'eligible_positions', 'fangraphs_id', 'mlbamid']:
+            merged_pitcher_stats[col] = pd.to_numeric(merged_pitcher_stats[col], errors='coerce')
+    merged_pitcher_stats = merged_pitcher_stats.fillna(0)
     # Update the database with blended pitcher stats
     logger.info("Updating database with blended pitcher stats...")
-    merged_pitcher_stats.to_sql('pitchers', engine, if_exists='append', index=False)
-    
+    try:
+        merged_pitcher_stats.to_sql('pitchers', engine, if_exists='replace', index=False)
+    except Exception as e:
+        logger.error(f"Error writing pitchers to DB: {e}")
     logger.info("Done!")
 
 if __name__ == "__main__":

@@ -153,7 +153,10 @@ def download_projections():
     chrome_options.add_argument('--disable-blink-features=AutomationControlled')
 
     # Set Chrome binary location for Heroku
-    chrome_options.binary_location = os.environ.get('GOOGLE_CHROME_BIN', '/app/.apt/usr/bin/google-chrome')
+    chrome_options.binary_location = os.environ.get(
+        "GOOGLE_CHROME_BIN",
+        "/app/.chrome-for-testing/chrome-linux64/chrome"
+    )
 
     # Set download directory
     download_dir = os.path.join(os.getcwd(), 'projections')
@@ -171,7 +174,12 @@ def download_projections():
     }
     chrome_options.add_experimental_option("prefs", prefs)
     
-    chrome_service = Service(os.environ.get('CHROMEDRIVER_PATH', '/app/.chromedriver/bin/chromedriver'))
+    chrome_service = Service(
+        os.environ.get(
+            "CHROMEDRIVER_PATH",
+            "/app/.chrome-for-testing/chromedriver-linux64/chromedriver"
+        )
+    )
     driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
     
     try:

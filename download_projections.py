@@ -147,13 +147,13 @@ def download_projections():
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
     chrome_options.add_argument('--window-size=1920,1080')
-    # user_data_dir = tempfile.mkdtemp()
-    # chrome_options.add_argument(f'--user-data-dir={user_data_dir}')
     chrome_options.add_argument('--disable-gpu')
-    chrome_options.add_argument('--disable-dev-shm-usage')
     chrome_options.add_argument('--disable-extensions')
     chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-    
+
+    # Set Chrome binary location for Heroku
+    chrome_options.binary_location = os.environ.get('GOOGLE_CHROME_BIN', '/app/.apt/usr/bin/google-chrome')
+
     # Set download directory
     download_dir = os.path.join(os.getcwd(), 'projections')
     os.makedirs(download_dir, exist_ok=True)
@@ -170,7 +170,10 @@ def download_projections():
     }
     chrome_options.add_experimental_option("prefs", prefs)
     
-    driver = webdriver.Chrome(options=chrome_options)
+    driver = webdriver.Chrome(
+        executable_path=os.environ.get('CHROMEDRIVER_PATH', '/app/.chromedriver/bin/chromedriver'),
+        options=chrome_options
+    )
     
     try:
         # Navigate to login page

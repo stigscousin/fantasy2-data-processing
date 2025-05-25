@@ -3,6 +3,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 import time
 import os
 import shutil
@@ -170,10 +171,8 @@ def download_projections():
     }
     chrome_options.add_experimental_option("prefs", prefs)
     
-    driver = webdriver.Chrome(
-        executable_path=os.environ.get('CHROMEDRIVER_PATH', '/app/.chromedriver/bin/chromedriver'),
-        options=chrome_options
-    )
+    chrome_service = Service(os.environ.get('CHROMEDRIVER_PATH', '/app/.chromedriver/bin/chromedriver'))
+    driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
     
     try:
         # Navigate to login page

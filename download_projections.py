@@ -11,6 +11,7 @@ from datetime import datetime
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from dotenv import load_dotenv
 import tempfile
+import pickle
 
 # Load environment variables
 load_dotenv()
@@ -19,6 +20,24 @@ load_dotenv()
 print("Environment variables loaded:")
 print("FANGRAPHS_USERNAME:", os.getenv('FANGRAPHS_USERNAME'))
 print("FANGRAPHS_PASSWORD:", "***" if os.getenv('FANGRAPHS_PASSWORD') else "Not set")
+
+COOKIES_PATH = "fangraphs_cookies.pkl"
+
+def save_cookies(driver, path):
+    with open(path, 'wb') as filehandler:
+        pickle.dump(driver.get_cookies(), filehandler)
+
+def load_cookies(driver, path):
+    with open(path, 'rb') as cookiesfile:
+        cookies = pickle.load(cookiesfile)
+        for cookie in cookies:
+            # Selenium requires expiry to be int, not float
+            if isinstance(cookie.get('expiry', None), float):
+                cookie['expiry'] = int(cookie['expiry'])
+            try:
+                driver.add_cookie(cookie)
+            except Exception as e:
+                print(f"Could not add cookie: {cookie}, error: {e}")
 
 def find_export_button(driver):
     """Try multiple strategies to find the export button"""
@@ -145,18 +164,14 @@ def download_projections():
     # Set up Chrome options
     chrome_options = webdriver.ChromeOptions()
     chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
     chrome_options.add_argument('--window-size=1920,1080')
     chrome_options.add_argument('--disable-gpu')
     chrome_options.add_argument('--disable-extensions')
     chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-
-    # Set Chrome binary location for Heroku
-    chrome_options.binary_location = os.environ.get(
-        "GOOGLE_CHROME_BIN",
-        "/app/.chrome-for-testing/chrome-linux64/chrome"
-    )
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    # Spoof user-agent to look like a real browser
+    chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
 
     # Set download directory
     download_dir = os.path.join(os.getcwd(), 'projections')
@@ -174,121 +189,40 @@ def download_projections():
     }
     chrome_options.add_experimental_option("prefs", prefs)
     
-    chrome_service = Service(
-        os.environ.get(
-            "CHROMEDRIVER_PATH",
-            "/app/.chrome-for-testing/chromedriver-linux64/chromedriver"
-        )
-    )
-    driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+    driver = webdriver.Chrome(options=chrome_options)
     
     try:
-        # Navigate to login page
-        print("Navigating to login page...")
-        driver.get("https://blogs.fangraphs.com/wp-login.php?redirect_to=https://www.fangraphs.com/")
-        
-        # Wait for page to load
-        time.sleep(5)
-        
-        print("Current URL:", driver.current_url)
-        print("Looking for login form...")
-        
-        try:
-            # Try multiple selectors for the username field
-            selectors = [
-                (By.ID, "user_login"),
-                (By.NAME, "log"),
-                (By.CSS_SELECTOR, "input#user_login")
-            ]
-            
-            username_field = None
-            for by, selector in selectors:
-                try:
-                    print(f"Trying selector: {by} = {selector}")
-                    username_field = WebDriverWait(driver, 5).until(
-                        EC.presence_of_element_located((by, selector))
-                    )
-                    if username_field:
-                        print(f"Found username field with {by} = {selector}")
-                        break
-                except:
-                    continue
-            
-            if not username_field:
-                print("Could not find username field. Taking screenshot...")
-                driver.save_screenshot('login_form_not_found.png')
-                print("Page source:")
-                print(driver.page_source)
-                raise Exception("Could not find username field")
-            
-            # Now find password field and submit button
-            password_field = driver.find_element(By.ID, "user_pass")
-            submit_button = driver.find_element(By.ID, "wp-submit")
-            
-            username = os.getenv('FANGRAPHS_USERNAME')
-            password = os.getenv('FANGRAPHS_PASSWORD')
-            
-            if not username or not password:
-                raise ValueError("FANGRAPHS_USERNAME and FANGRAPHS_PASSWORD environment variables must be set")
-            
-            print("Found all form elements, filling in credentials...")
-            
-            username_field.clear()
-            username_field.send_keys(username)
-            
-            password_field.clear()
-            password_field.send_keys(password)
-            
-            print("Submitting form...")
-            submit_button.click()
-            
-            print("Waiting for login to complete...")
-            time.sleep(5)
-            
-        except Exception as e:
-            print(f"Error during login: {str(e)}")
-            print("Current URL:", driver.current_url)
-            driver.save_screenshot('login_error.png')
-            raise
-        
-        # Verify login was successful
-        if not verify_login(driver):
-            print("Login verification failed. Taking screenshot...")
-            driver.save_screenshot('login_failed.png')
-            print("Current URL:", driver.current_url)
-            print("Page source:")
-            print(driver.page_source)
-            raise Exception("Login verification failed")
-        
+        driver.get("https://www.fangraphs.com/")
+        time.sleep(3)
+        if not os.path.exists(COOKIES_PATH):
+            print("No cookies found. Please log in manually in the opened browser window.")
+            print("After logging in, press Enter here to continue...")
+            input()
+            save_cookies(driver, COOKIES_PATH)
+            print("Cookies saved. You should not need to log in manually next time.")
+        else:
+            print("Loading cookies from file...")
+            load_cookies(driver, COOKIES_PATH)
+            driver.refresh()
+            time.sleep(3)
+        # Now continue as if logged in
         print("Navigating to projections page...")
         driver.get('https://www.fangraphs.com/projections?pos=all&stats=bat&type=ratcdc')
-        
         print("Waiting for page to load...")
         time.sleep(5)
-        
         print("Current URL:", driver.current_url)
-        
-        # Download batters first
         download_projections_for_type(driver, "batters")
-        
-        # Then download pitchers
         print("Navigating to pitchers page...")
         driver.get('https://www.fangraphs.com/projections?type=ratcdc&stats=pit&pos=all&team=0&players=0&lg=all&z=1744973723&pageitems=30&statgroup=dashboard&fantasypreset=dashboard')
-        time.sleep(5)  # Wait for page to load
-        
-        # Verify we're on the pitchers page
+        time.sleep(5)
         if "stats=pit" not in driver.current_url:
             raise Exception("Failed to navigate to pitchers page")
-        
         print("Looking for table...")
-        # Wait for the table to be present
         table = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, 'div[class*="table-wrapper"]'))
         )
-        
         print("Table found. Looking for export button...")
         export_button = find_export_button(driver)
-        
         if not export_button:
             print("Could not find export button. Taking screenshot...")
             driver.save_screenshot(f'projections_page_pitchers.png')
@@ -299,37 +233,27 @@ def download_projections():
             for link in links:
                 print(f"Link text: {link.text}, href: {link.get_attribute('href')}")
             raise Exception("Could not find export button for pitchers")
-        
         print("Clicking export button...")
-        # Try to click using JavaScript
         try:
             driver.execute_script("arguments[0].scrollIntoView(true);", export_button)
             time.sleep(2)
             driver.execute_script("arguments[0].click();", export_button)
         except Exception as e:
             print(f"JavaScript click failed: {str(e)}")
-            # Fallback to regular click
             export_button.click()
-        
         print("Waiting for download...")
         time.sleep(5)
-        
-        # Rename the downloaded file to indicate player type
-        # Check for both the original name and Chrome's auto-numbered version
         potential_old_files = [
             os.path.join(os.getcwd(), 'projections', 'fangraphs-leaderboard-projections.csv'),
             os.path.join(os.getcwd(), 'projections', 'fangraphs-leaderboard-projections (1).csv')
         ]
         new_file = os.path.join(os.getcwd(), 'projections', 'fangraphs-leaderboard-projections-pitchers.csv')
-        
         for old_file in potential_old_files:
             if os.path.exists(old_file):
                 shutil.move(old_file, new_file)
                 print(f"Renamed file to {new_file}")
                 break
-        
         print("Successfully downloaded pitchers projections")
-        
     except Exception as e:
         print(f"Error during process: {str(e)}")
         print("Current URL:", driver.current_url)

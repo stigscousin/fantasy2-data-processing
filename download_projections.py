@@ -216,17 +216,21 @@ def download_projections():
             if fangraphs_username and fangraphs_password:
                 print("Attempting automated login with environment credentials...")
                 try:
-                    # Try to find and fill login form
+                    # Navigate to the WordPress login page
+                    driver.get("https://blogs.fangraphs.com/wp-login.php?redirect_to=https://www.fangraphs.com/")
+                    time.sleep(3)
+                    
+                    # Try to find and fill login form with WordPress field names
                     username_field = WebDriverWait(driver, 10).until(
-                        EC.presence_of_element_located((By.NAME, "username"))
+                        EC.presence_of_element_located((By.NAME, "log"))
                     )
-                    password_field = driver.find_element(By.NAME, "password")
+                    password_field = driver.find_element(By.NAME, "pwd")
                     
                     username_field.send_keys(fangraphs_username)
                     password_field.send_keys(fangraphs_password)
                     
                     # Find and click login button
-                    login_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+                    login_button = driver.find_element(By.CSS_SELECTOR, "input[type='submit']")
                     login_button.click()
                     
                     time.sleep(5)
@@ -265,16 +269,20 @@ def download_projections():
                 print("Cookies expired. Attempting re-login...")
                 if fangraphs_username and fangraphs_password:
                     try:
-                        # Try automated re-login
+                        # Navigate to the WordPress login page for re-login
+                        driver.get("https://blogs.fangraphs.com/wp-login.php?redirect_to=https://www.fangraphs.com/")
+                        time.sleep(3)
+                        
+                        # Try automated re-login with WordPress field names
                         username_field = WebDriverWait(driver, 10).until(
-                            EC.presence_of_element_located((By.NAME, "username"))
+                            EC.presence_of_element_located((By.NAME, "log"))
                         )
-                        password_field = driver.find_element(By.NAME, "password")
+                        password_field = driver.find_element(By.NAME, "pwd")
                         
                         username_field.send_keys(fangraphs_username)
                         password_field.send_keys(fangraphs_password)
                         
-                        login_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+                        login_button = driver.find_element(By.CSS_SELECTOR, "input[type='submit']")
                         login_button.click()
                         
                         time.sleep(5)

@@ -173,6 +173,19 @@ def download_projections():
     # Spoof user-agent to look like a real browser
     chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
 
+    # Bright Data proxy configuration
+    brightdata_username = os.getenv('BRIGHTDATA_USERNAME')
+    brightdata_password = os.getenv('BRIGHTDATA_PASSWORD')
+    brightdata_host = os.getenv('BRIGHTDATA_HOST', 'brd.superproxy.io')
+    brightdata_port = os.getenv('BRIGHTDATA_PORT', '22225')
+    
+    if brightdata_username and brightdata_password:
+        print("Using Bright Data proxy...")
+        proxy_string = f"http://{brightdata_username}-country-us:{brightdata_password}@{brightdata_host}:{brightdata_port}"
+        chrome_options.add_argument(f'--proxy-server={proxy_string}')
+    else:
+        print("Warning: Bright Data credentials not found. Running without proxy.")
+
     # Set download directory
     download_dir = os.path.join(os.getcwd(), 'projections')
     os.makedirs(download_dir, exist_ok=True)
@@ -194,17 +207,89 @@ def download_projections():
     try:
         driver.get("https://www.fangraphs.com/")
         time.sleep(3)
+        
+        # Check if we have FanGraphs credentials in environment variables
+        fangraphs_username = os.getenv('FANGRAPHS_USERNAME')
+        fangraphs_password = os.getenv('FANGRAPHS_PASSWORD')
+        
         if not os.path.exists(COOKIES_PATH):
-            print("No cookies found. Please log in manually in the opened browser window.")
-            print("After logging in, press Enter here to continue...")
-            input()
-            save_cookies(driver, COOKIES_PATH)
-            print("Cookies saved. You should not need to log in manually next time.")
+            if fangraphs_username and fangraphs_password:
+                print("Attempting automated login with environment credentials...")
+                try:
+                    # Try to find and fill login form
+                    username_field = WebDriverWait(driver, 10).until(
+                        EC.presence_of_element_located((By.NAME, "username"))
+                    )
+                    password_field = driver.find_element(By.NAME, "password")
+                    
+                    username_field.send_keys(fangraphs_username)
+                    password_field.send_keys(fangraphs_password)
+                    
+                    # Find and click login button
+                    login_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+                    login_button.click()
+                    
+                    time.sleep(5)
+                    
+                    # Check if login was successful
+                    if verify_login(driver):
+                        print("Automated login successful!")
+                        save_cookies(driver, COOKIES_PATH)
+                    else:
+                        print("Automated login failed. Please check credentials.")
+                        raise Exception("Login failed")
+                        
+                except Exception as e:
+                    print(f"Automated login failed: {str(e)}")
+                    print("Falling back to manual login...")
+                    print("Please log in manually in the opened browser window.")
+                    print("After logging in, press Enter here to continue...")
+                    input()
+                    save_cookies(driver, COOKIES_PATH)
+                    print("Cookies saved. You should not need to log in manually next time.")
+            else:
+                print("No cookies found and no FanGraphs credentials in environment variables.")
+                print("Please log in manually in the opened browser window.")
+                print("After logging in, press Enter here to continue...")
+                input()
+                save_cookies(driver, COOKIES_PATH)
+                print("Cookies saved. You should not need to log in manually next time.")
         else:
             print("Loading cookies from file...")
             load_cookies(driver, COOKIES_PATH)
             driver.refresh()
             time.sleep(3)
+            
+            # Verify login is still valid
+            if not verify_login(driver):
+                print("Cookies expired. Attempting re-login...")
+                if fangraphs_username and fangraphs_password:
+                    try:
+                        # Try automated re-login
+                        username_field = WebDriverWait(driver, 10).until(
+                            EC.presence_of_element_located((By.NAME, "username"))
+                        )
+                        password_field = driver.find_element(By.NAME, "password")
+                        
+                        username_field.send_keys(fangraphs_username)
+                        password_field.send_keys(fangraphs_password)
+                        
+                        login_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+                        login_button.click()
+                        
+                        time.sleep(5)
+                        
+                        if verify_login(driver):
+                            print("Re-login successful!")
+                            save_cookies(driver, COOKIES_PATH)
+                        else:
+                            raise Exception("Re-login failed")
+                    except Exception as e:
+                        print(f"Automated re-login failed: {str(e)}")
+                        raise Exception("Login required but no interactive session available")
+                else:
+                    raise Exception("Login required but no credentials available")
+            
         # Now continue as if logged in
         print("Navigating to projections page...")
         driver.get('https://www.fangraphs.com/projections?pos=all&stats=bat&type=ratcdc')

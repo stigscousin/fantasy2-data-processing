@@ -213,9 +213,14 @@ def download_projections():
                 print("Login successful!")
                 save_cookies(session, COOKIES_PATH)
             else:
-                print("Login failed - verification unsuccessful")
-                print(f"Response content preview: {login_response.text[:1000]}")
-                raise Exception("Login failed")
+                # Check if we got redirected to the homepage (which indicates successful login)
+                if "FanGraphs Baseball" in login_response.text and "Baseball Statistics and Analysis" in login_response.text:
+                    print("Login successful! (detected homepage redirect)")
+                    save_cookies(session, COOKIES_PATH)
+                else:
+                    print("Login failed - verification unsuccessful")
+                    print(f"Response content preview: {login_response.text[:1000]}")
+                    raise Exception("Login failed")
 
         print("Login successful, downloading projections...")
         

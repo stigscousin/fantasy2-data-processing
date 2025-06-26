@@ -16,19 +16,43 @@ PROJECTIONS_DIR = 'projections'
 
 def save_cookies(session, path):
     """Save cookies from session to file"""
-    cookies = session.cookies
-    with open(path, 'wb') as f:
-        pickle.dump(cookies, f)
-    print(f"Cookies saved to {path}")
+    try:
+        # Convert curl_cffi cookies to a format we can pickle
+        cookies_to_save = []
+        for cookie in session.cookies:
+            cookies_to_save.append({
+                'name': cookie.name,
+                'value': cookie.value,
+                'domain': cookie.domain,
+                'path': cookie.path
+            })
+        
+        with open(path, 'wb') as f:
+            pickle.dump(cookies_to_save, f)
+        print(f"Cookies saved to {path}")
+    except Exception as e:
+        print(f"Error saving cookies: {e}")
 
 def load_cookies(session, path):
     """Load cookies from file into session"""
     if os.path.exists(path):
-        with open(path, 'rb') as f:
-            cookies = pickle.load(f)
-        session.cookies.update(cookies)
-        print(f"Cookies loaded from {path}")
-        return True
+        try:
+            with open(path, 'rb') as f:
+                cookies = pickle.load(f)
+            
+            # Convert cookies to curl_cffi format
+            for cookie in cookies:
+                session.cookies.set(
+                    name=cookie['name'],
+                    value=cookie['value'],
+                    domain=cookie['domain'],
+                    path=cookie['path']
+                )
+            print(f"Cookies loaded from {path}")
+            return True
+        except Exception as e:
+            print(f"Error loading cookies: {e}")
+            return False
     return False
 
 def verify_login(session):

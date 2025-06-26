@@ -1,343 +1,214 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-import time
 import os
-import shutil
-from datetime import datetime
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from dotenv import load_dotenv
-import tempfile
+import time
 import pickle
+from pathlib import Path
+from datetime import datetime
+from curl_cffi import requests
+import pandas as pd
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# Debug: Check if environment variables are loaded
-print("Environment variables loaded:")
-print("FANGRAPHS_USERNAME:", os.getenv('FANGRAPHS_USERNAME'))
-print("FANGRAPHS_PASSWORD:", "***" if os.getenv('FANGRAPHS_PASSWORD') else "Not set")
+# Constants
+COOKIES_PATH = 'fangraphs_cookies.pkl'
+PROJECTIONS_DIR = 'projections'
 
-COOKIES_PATH = "fangraphs_cookies.pkl"
+def save_cookies(session, path):
+    """Save cookies from session to file"""
+    cookies = session.cookies
+    with open(path, 'wb') as f:
+        pickle.dump(cookies, f)
+    print(f"Cookies saved to {path}")
 
-def save_cookies(driver, path):
-    with open(path, 'wb') as filehandler:
-        pickle.dump(driver.get_cookies(), filehandler)
-
-def load_cookies(driver, path):
-    with open(path, 'rb') as cookiesfile:
-        cookies = pickle.load(cookiesfile)
-        for cookie in cookies:
-            # Selenium requires expiry to be int, not float
-            if isinstance(cookie.get('expiry', None), float):
-                cookie['expiry'] = int(cookie['expiry'])
-            try:
-                driver.add_cookie(cookie)
-            except Exception as e:
-                print(f"Could not add cookie: {cookie}, error: {e}")
-
-def find_export_button(driver):
-    """Try multiple strategies to find the export button"""
-    strategies = [
-        (By.CSS_SELECTOR, "a.data-export"),  # Class-based - most likely match
-        (By.CSS_SELECTOR, "a[href*='data:application/csv']"),  # href-based
-        (By.CSS_SELECTOR, "a[href*='Export']"),  # Text in href
-        (By.XPATH, "//a[contains(@class, 'data-export')]"),  # XPath class
-        (By.XPATH, "//a[contains(text(), 'Export')]"),  # Text content
-    ]
-    
-    for by, selector in strategies:
-        try:
-            print(f"Trying to find export button with {by}: {selector}")
-            # First check if element exists
-            elements = driver.find_elements(by, selector)
-            if elements:
-                print(f"Found {len(elements)} potential export buttons")
-                for element in elements:
-                    try:
-                        print(f"Button text: {element.text}")
-                        print(f"Button href: {element.get_attribute('href')}")
-                        print(f"Button class: {element.get_attribute('class')}")
-                        if element.is_displayed() and element.is_enabled():
-                            print(f"Found clickable button using {by}: {selector}")
-                            return element
-                    except:
-                        continue
-            else:
-                print(f"No elements found with {by}: {selector}")
-        except Exception as e:
-            print(f"Error trying {by}: {selector} - {str(e)}")
-            continue
-    
-    return None
-
-def verify_login(driver):
-    """Verify that we're actually logged in"""
-    try:
-        # Try to find a logged-in element
-        WebDriverWait(driver, 5).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, 'a[href*="logout"]'))
-        )
-        print("Successfully verified login")
+def load_cookies(session, path):
+    """Load cookies from file into session"""
+    if os.path.exists(path):
+        with open(path, 'rb') as f:
+            cookies = pickle.load(f)
+        session.cookies.update(cookies)
+        print(f"Cookies loaded from {path}")
         return True
-    except:
-        print("Could not verify login - might not be logged in")
+    return False
+
+def verify_login(session):
+    """Verify if we're logged in by checking for member indicators"""
+    try:
+        # Try to access a page that requires login
+        response = session.get("https://www.fangraphs.com/", timeout=10)
+        if response.status_code == 200:
+            # Check for login indicators in the response
+            if "fg_is_member" in response.text or "logout" in response.text.lower():
+                print("Login verification successful")
+                return True
+            else:
+                print("Login verification failed - no member indicators found")
+                return False
+        else:
+            print(f"Login verification failed - status code: {response.status_code}")
+            return False
+    except Exception as e:
+        print(f"Login verification error: {e}")
         return False
 
-def download_projections_for_type(driver, player_type="batters"):
-    """Download projections for either batters or pitchers"""
-    print(f"Downloading {player_type} projections...")
-    
-    if player_type == "pitchers":
-        print("Navigating to pitchers page...")
-        try:
-            # Navigate directly to the pitchers page
-            driver.get('https://www.fangraphs.com/projections?type=ratcdc&stats=pit&pos=all&team=0&players=0&lg=all&z=1744973723&pageitems=30&statgroup=dashboard&fantasypreset=dashboard')
-            time.sleep(5)  # Wait for page to load
-            
-            # Verify we're on the pitchers page
-            if "stats=pit" not in driver.current_url:
-                raise Exception("Failed to navigate to pitchers page")
-            
-        except Exception as e:
-            print(f"Error navigating to pitchers page: {str(e)}")
-            driver.save_screenshot(f'error_pitchers_page.png')
-            print("Current URL:", driver.current_url)
-            print("Page source:")
-            print(driver.page_source)
-            raise
-    
-    print("Looking for table...")
-    # Wait for the table to be present
-    table = WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, 'div[class*="table-wrapper"]'))
-    )
-    
-    print("Table found. Looking for export button...")
-    export_button = find_export_button(driver)
-    
-    if not export_button:
-        print("Could not find export button. Taking screenshot...")
-        driver.save_screenshot(f'projections_page_{player_type}.png')
-        print("\nPage source:")
-        print(driver.page_source)
-        print("\nAll elements with 'a' tag:")
-        links = driver.find_elements(By.TAG_NAME, 'a')
-        for link in links:
-            print(f"Link text: {link.text}, href: {link.get_attribute('href')}")
-        raise Exception(f"Could not find export button for {player_type}")
-    
-    print("Clicking export button...")
-    # Try to click using JavaScript
-    try:
-        driver.execute_script("arguments[0].scrollIntoView(true);", export_button)
-        time.sleep(2)
-        driver.execute_script("arguments[0].click();", export_button)
-    except Exception as e:
-        print(f"JavaScript click failed: {str(e)}")
-        # Fallback to regular click
-        export_button.click()
-    
-    print("Waiting for download...")
-    time.sleep(5)
-    
-    # Rename the downloaded file to indicate player type
-    # Check for both the original name and Chrome's auto-numbered version
-    potential_old_files = [
-        os.path.join(os.getcwd(), 'projections', 'fangraphs-leaderboard-projections.csv'),
-        os.path.join(os.getcwd(), 'projections', 'fangraphs-leaderboard-projections (1).csv')
-    ]
-    new_file = os.path.join(os.getcwd(), 'projections', f'fangraphs-leaderboard-projections-{player_type}.csv')
-    
-    for old_file in potential_old_files:
-        if os.path.exists(old_file):
-            shutil.move(old_file, new_file)
-            print(f"Renamed file to {new_file}")
-            break
-    
-    print(f"Successfully downloaded {player_type} projections")
-
 def download_projections():
-    # Set up Chrome options
-    chrome_options = webdriver.ChromeOptions()
-    chrome_options.add_argument('--headless')
-    chrome_options.add_argument('--window-size=1920,1080')
-    chrome_options.add_argument('--disable-gpu')
-    chrome_options.add_argument('--disable-extensions')
-    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    # Spoof user-agent to look like a real browser
-    chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-
-    # Bright Data proxy configuration
-    brightdata_username = os.getenv('BRIGHTDATA_USERNAME')
-    brightdata_password = os.getenv('BRIGHTDATA_PASSWORD')
-    brightdata_host = os.getenv('BRIGHTDATA_HOST', 'brd.superproxy.io')
-    brightdata_port = os.getenv('BRIGHTDATA_PORT', '22225')
+    """Download FanGraphs projections using curl_cffi"""
+    print("Environment variables loaded:")
+    print(f"FANGRAPHS_USERNAME: \"{os.getenv('FANGRAPHS_USERNAME')}\"")
+    print(f"FANGRAPHS_PASSWORD: \"***\"")
     
-    if brightdata_username and brightdata_password:
-        print("Using Bright Data proxy...")
-        proxy_string = f"http://{brightdata_username}-country-us:{brightdata_password}@{brightdata_host}:{brightdata_port}"
-        chrome_options.add_argument(f'--proxy-server={proxy_string}')
-    else:
-        print("Warning: Bright Data credentials not found. Running without proxy.")
-
-    # Set download directory
-    download_dir = os.path.join(os.getcwd(), 'projections')
-    os.makedirs(download_dir, exist_ok=True)
-    prefs = {
-        "download.default_directory": download_dir,
-        "download.prompt_for_download": False,
-        "download.directory_upgrade": True,
-        "safebrowsing.enabled": True,
-        "download.default_directory": download_dir,
-        # Additional preferences to handle data URLs
-        "profile.default_content_settings.popups": 0,
-        "download.prompt_for_download": False,
-        "browser.helperApps.neverAsk.saveToDisk": "application/csv,text/csv"
-    }
-    chrome_options.add_experimental_option("prefs", prefs)
+    # Create projections directory if it doesn't exist
+    os.makedirs(PROJECTIONS_DIR, exist_ok=True)
     
-    driver = webdriver.Chrome(options=chrome_options)
+    # Set up session with curl_cffi
+    session = requests.Session()
+    
+    # Configure session for better anti-bot bypass
+    session.headers.update({
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+    })
+    
+    # Check if we have FanGraphs credentials
+    fangraphs_username = os.getenv('FANGRAPHS_USERNAME')
+    fangraphs_password = os.getenv('FANGRAPHS_PASSWORD')
+    
+    if not fangraphs_username or not fangraphs_password:
+        raise Exception("No FanGraphs credentials available")
     
     try:
-        driver.get("https://www.fangraphs.com/")
-        time.sleep(3)
-        
-        # Check if we have FanGraphs credentials in environment variables
-        fangraphs_username = os.getenv('FANGRAPHS_USERNAME')
-        fangraphs_password = os.getenv('FANGRAPHS_PASSWORD')
-        
-        # Always attempt fresh login - skip cookie loading
-        if fangraphs_username and fangraphs_password:
-            print("Attempting fresh login with environment credentials...")
-            try:
-                # Navigate to the WordPress login page
-                driver.get("https://blogs.fangraphs.com/wp-login.php?redirect_to=https://www.fangraphs.com/")
-                time.sleep(3)
-                
-                # Debug: Print current URL and page title
-                print(f"Current URL: {driver.current_url}")
-                print(f"Page title: {driver.title}")
-                
-                # Debug: Check if we can find any form elements
-                try:
-                    forms = driver.find_elements(By.TAG_NAME, "form")
-                    print(f"Found {len(forms)} form(s) on the page")
-                    for i, form in enumerate(forms):
-                        print(f"Form {i}: action='{form.get_attribute('action')}', method='{form.get_attribute('method')}'")
-                except Exception as e:
-                    print(f"Error finding forms: {e}")
-                
-                # Debug: Print page source to see what's actually loaded
-                try:
-                    page_source = driver.page_source
-                    print(f"Page source length: {len(page_source)} characters")
-                    print("First 500 characters of page source:")
-                    print(page_source[:500])
-                    
-                    # Check for common indicators
-                    if "cloudflare" in page_source.lower():
-                        print("⚠️  Cloudflare detected in page source!")
-                    if "captcha" in page_source.lower():
-                        print("⚠️  Captcha detected in page source!")
-                    if "blocked" in page_source.lower():
-                        print("⚠️  Blocked page detected!")
-                    if "security" in page_source.lower():
-                        print("⚠️  Security check detected!")
-                except Exception as e:
-                    print(f"Error getting page source: {e}")
-                
-                # Try to find and fill login form
-                username_field = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.NAME, "log"))
-                )
-                password_field = driver.find_element(By.NAME, "pwd")
-                
-                username_field.send_keys(fangraphs_username)
-                password_field.send_keys(fangraphs_password)
-                
-                # Submit the form
-                submit_button = driver.find_element(By.ID, "wp-submit")
-                submit_button.click()
-                
-                time.sleep(5)
-                
-                # Verify login was successful
-                if verify_login(driver):
-                    print("Automated login successful!")
-                    save_cookies(driver, COOKIES_PATH)
-                else:
-                    print("Automated login failed - login verification failed")
-                    raise Exception("Login verification failed")
-                    
-            except Exception as e:
-                print(f"Automated login failed: {e}")
-                raise Exception("Automated login failed")
+        # Try to load existing cookies first
+        if load_cookies(session, COOKIES_PATH):
+            if verify_login(session):
+                print("Using existing login session")
+            else:
+                print("Existing cookies expired, attempting fresh login...")
+                # Clear cookies and try fresh login
+                session.cookies.clear()
         else:
-            print("No FanGraphs credentials found in environment variables")
-            raise Exception("No FanGraphs credentials available")
+            print("No existing cookies found, attempting fresh login...")
         
-        # Now continue as if logged in
-        print("Navigating to projections page...")
-        driver.get('https://www.fangraphs.com/projections?pos=all&stats=bat&type=ratcdc')
-        print("Waiting for page to load...")
-        time.sleep(5)
-        print("Current URL:", driver.current_url)
-        download_projections_for_type(driver, "batters")
-        print("Navigating to pitchers page...")
-        driver.get('https://www.fangraphs.com/projections?type=ratcdc&stats=pit&pos=all&team=0&players=0&lg=all&z=1744973723&pageitems=30&statgroup=dashboard&fantasypreset=dashboard')
-        time.sleep(5)
-        if "stats=pit" not in driver.current_url:
-            raise Exception("Failed to navigate to pitchers page")
-        print("Looking for table...")
-        table = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, 'div[class*="table-wrapper"]'))
-        )
-        print("Table found. Looking for export button...")
-        export_button = find_export_button(driver)
-        if not export_button:
-            print("Could not find export button. Taking screenshot...")
-            driver.save_screenshot(f'projections_page_pitchers.png')
-            print("\nPage source:")
-            print(driver.page_source)
-            print("\nAll elements with 'a' tag:")
-            links = driver.find_elements(By.TAG_NAME, 'a')
-            for link in links:
-                print(f"Link text: {link.text}, href: {link.get_attribute('href')}")
-            raise Exception("Could not find export button for pitchers")
-        print("Clicking export button...")
-        try:
-            driver.execute_script("arguments[0].scrollIntoView(true);", export_button)
-            time.sleep(2)
-            driver.execute_script("arguments[0].click();", export_button)
-        except Exception as e:
-            print(f"JavaScript click failed: {str(e)}")
-            export_button.click()
-        print("Waiting for download...")
-        time.sleep(5)
-        potential_old_files = [
-            os.path.join(os.getcwd(), 'projections', 'fangraphs-leaderboard-projections.csv'),
-            os.path.join(os.getcwd(), 'projections', 'fangraphs-leaderboard-projections (1).csv')
-        ]
-        new_file = os.path.join(os.getcwd(), 'projections', 'fangraphs-leaderboard-projections-pitchers.csv')
-        for old_file in potential_old_files:
-            if os.path.exists(old_file):
-                shutil.move(old_file, new_file)
-                print(f"Renamed file to {new_file}")
-                break
-        print("Successfully downloaded pitchers projections")
+        # Perform fresh login if needed
+        if not verify_login(session):
+            print("Attempting fresh login with curl_cffi...")
+            
+            # First, get the login page to extract any necessary tokens
+            login_url = "https://blogs.fangraphs.com/wp-login.php?redirect_to=https://www.fangraphs.com/"
+            response = session.get(login_url, timeout=10)
+            
+            if response.status_code != 200:
+                print(f"Failed to load login page: {response.status_code}")
+                raise Exception("Could not load login page")
+            
+            print(f"Login page loaded successfully (status: {response.status_code})")
+            
+            # Extract nonce if present (WordPress security token)
+            nonce = None
+            if 'name="_wpnonce"' in response.text:
+                import re
+                nonce_match = re.search(r'name="_wpnonce" value="([^"]+)"', response.text)
+                if nonce_match:
+                    nonce = nonce_match.group(1)
+                    print(f"Found WordPress nonce: {nonce}")
+            
+            # Prepare login data
+            login_data = {
+                'log': fangraphs_username,
+                'pwd': fangraphs_password,
+                'wp-submit': 'Log In',
+                'redirect_to': 'https://www.fangraphs.com/',
+                'testcookie': '1'
+            }
+            
+            if nonce:
+                login_data['_wpnonce'] = nonce
+            
+            # Submit login form
+            print("Submitting login form...")
+            login_response = session.post(login_url, data=login_data, timeout=10)
+            
+            print(f"Login response status: {login_response.status_code}")
+            print(f"Login response URL: {login_response.url}")
+            
+            # Check if login was successful
+            if verify_login(session):
+                print("Login successful!")
+                save_cookies(session, COOKIES_PATH)
+            else:
+                print("Login failed - verification unsuccessful")
+                print(f"Response content preview: {login_response.text[:500]}")
+                raise Exception("Login failed")
+        
+        # Now download the projections
+        print("Login successful, downloading projections...")
+        
+        # Download batters projections
+        batters_url = "https://www.fangraphs.com/api/projections"
+        batters_params = {
+            'type': '0',
+            'pos': 'all',
+            'stats': 'bat',
+            'qual': '0',
+            'sort': '31,d',
+            'season': '2025',
+            'team': '0,ts',
+            'rost': '0',
+            'filter': '',
+            'players': '0',
+            'pg': '0'
+        }
+        
+        print("Downloading batters projections...")
+        batters_response = session.get(batters_url, params=batters_params, timeout=30)
+        
+        if batters_response.status_code == 200:
+            batters_df = pd.read_csv(batters_response.content)
+            batters_path = os.path.join(PROJECTIONS_DIR, 'fangraphs-leaderboard-projections-batters.csv')
+            batters_df.to_csv(batters_path, index=False)
+            print(f"Batters projections saved: {batters_path} ({len(batters_df)} players)")
+        else:
+            print(f"Failed to download batters projections: {batters_response.status_code}")
+            print(f"Response: {batters_response.text[:500]}")
+            raise Exception("Failed to download batters projections")
+        
+        # Download pitchers projections
+        pitchers_params = {
+            'type': '0',
+            'pos': 'all',
+            'stats': 'pit',
+            'qual': '0',
+            'sort': '31,d',
+            'season': '2025',
+            'team': '0,ts',
+            'rost': '0',
+            'filter': '',
+            'players': '0',
+            'pg': '0'
+        }
+        
+        print("Downloading pitchers projections...")
+        pitchers_response = session.get(batters_url, params=pitchers_params, timeout=30)
+        
+        if pitchers_response.status_code == 200:
+            pitchers_df = pd.read_csv(pitchers_response.content)
+            pitchers_path = os.path.join(PROJECTIONS_DIR, 'fangraphs-leaderboard-projections-pitchers.csv')
+            pitchers_df.to_csv(pitchers_path, index=False)
+            print(f"Pitchers projections saved: {pitchers_path} ({len(pitchers_df)} players)")
+        else:
+            print(f"Failed to download pitchers projections: {pitchers_response.status_code}")
+            print(f"Response: {pitchers_response.text[:500]}")
+            raise Exception("Failed to download pitchers projections")
+        
+        print("All projections downloaded successfully!")
+        
     except Exception as e:
-        print(f"Error during process: {str(e)}")
-        print("Current URL:", driver.current_url)
-        driver.save_screenshot('error_state.png')
+        print(f"Error during process: {e}")
         raise
-    finally:
-        driver.quit()
 
 if __name__ == "__main__":
     download_projections() 

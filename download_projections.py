@@ -250,15 +250,19 @@ def download_projections():
             driver.get("https://www.fangraphs.com")
             for cookie in session.cookies:
                 try:
-                    driver.add_cookie({
-                        'name': cookie.name,
-                        'value': cookie.value,
-                        'domain': cookie.domain,
-                        'path': cookie.path,
-                        'secure': cookie.secure
-                    })
+                    # Handle curl_cffi cookie objects which might be strings or have different attributes
+                    if hasattr(cookie, 'name') and hasattr(cookie, 'value'):
+                        driver.add_cookie({
+                            'name': cookie.name,
+                            'value': cookie.value,
+                            'domain': getattr(cookie, 'domain', ''),
+                            'path': getattr(cookie, 'path', '/'),
+                            'secure': getattr(cookie, 'secure', False)
+                        })
+                    else:
+                        print(f"Skipping cookie with unexpected format: {cookie}")
                 except Exception as e:
-                    print(f"Error adding cookie {cookie.name}: {e}")
+                    print(f"Error adding cookie: {e}")
             
             # Download batters projections
             print("Downloading batters projections...")

@@ -7,6 +7,7 @@ from curl_cffi import requests
 import pandas as pd
 from dotenv import load_dotenv
 import traceback
+import urllib3
 
 # Load environment variables
 load_dotenv()
@@ -117,6 +118,9 @@ def download_projections():
             'http': proxy_url,
             'https': proxy_url
         }
+        # Configure SSL settings for proxy
+        session.verify = False
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     else:
         print("No proxy configured.")
 

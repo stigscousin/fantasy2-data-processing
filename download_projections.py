@@ -97,8 +97,11 @@ def download_projections():
     # Construct proxy URL from BrightData credentials
     proxy_url = None
     if brightdata_username and brightdata_password:
+        # Try datacenter proxies first (no KYC required)
         proxy_url = f"http://{brightdata_username}:{brightdata_password}@brd.superproxy.io:22225"
-        print(f"Constructed proxy URL from BrightData credentials")
+        print(f"Constructed proxy URL from BrightData credentials (datacenter)")
+    else:
+        print("No BrightData credentials found.")
     
     print(f"FANGRAPHS_USERNAME: {repr(fangraphs_username)} (type: {type(fangraphs_username)})")
     print(f"FANGRAPHS_PASSWORD: {'***' if fangraphs_password else None} (type: {type(fangraphs_password)})")
@@ -112,6 +115,7 @@ def download_projections():
 
     # Set up session with curl_cffi
     session = requests.Session()
+    use_proxy = False
     if proxy_url:
         print(f"Using proxy: {proxy_url}")
         session.proxies = {
@@ -121,6 +125,7 @@ def download_projections():
         # Configure SSL settings for proxy
         session.verify = False
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        use_proxy = True
     else:
         print("No proxy configured.")
 
@@ -163,6 +168,15 @@ def download_projections():
             print(f"Login page cookies: {dict(response.cookies)}")
             print(f"Cloudflare headers: {{k: v for k, v in response.headers.items() if 'cf-' in k.lower() or 'cloudflare' in k.lower()}}")
             print(f"Login page body (first 1000 chars): {response.text[:1000]}")
+
+            # If proxy failed with 402, try without proxy
+            if response.status_code == 402 and use_proxy:
+                print("Proxy failed with 402 error, retrying without proxy...")
+                session.proxies = {}
+                session.verify = True
+                response = session.get(login_url, timeout=10)
+                print(f"Retry without proxy - status: {response.status_code}")
+                print(f"Retry without proxy - headers: {dict(response.headers)}")
 
             if response.status_code != 200:
                 print(f"Failed to load login page: {response.status_code}")

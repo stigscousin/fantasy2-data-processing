@@ -69,7 +69,7 @@ def update_data():
     # Define the sequence of scripts to run
     scripts = [
         ('src/fetch_espn_stats.py', 'ESPN stats fetch'),
-        # ('download_projections.py', 'FanGraphs projections download'),  # Manually updated locally
+        ('download_projections.py', 'FanGraphs projections download'),
     ]
     # if not skip_fangraphs:
     #     scripts.append(('download_projections.py', 'FanGraphs projections download'))
@@ -81,6 +81,7 @@ def update_data():
         ('scripts/calculate_team_stats.py', 'Team stats calculation'),
         ('scripts/calculate_hitter_impacts.py', 'Hitter impact calculations'),
         ('scripts/calculate_incremental_points.py', 'Pitcher impact calculations'),
+        ('scripts/clean_team_names.py', 'Team name cleaning'),
     ]
     
     # Run each script in sequence

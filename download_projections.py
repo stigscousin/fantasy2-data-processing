@@ -233,6 +233,25 @@ def download_projections():
                 except Exception as e:
                     print(f"Error finding forms: {e}")
                 
+                # Debug: Print page source to see what's actually loaded
+                try:
+                    page_source = driver.page_source
+                    print(f"Page source length: {len(page_source)} characters")
+                    print("First 500 characters of page source:")
+                    print(page_source[:500])
+                    
+                    # Check for common indicators
+                    if "cloudflare" in page_source.lower():
+                        print("⚠️  Cloudflare detected in page source!")
+                    if "captcha" in page_source.lower():
+                        print("⚠️  Captcha detected in page source!")
+                    if "blocked" in page_source.lower():
+                        print("⚠️  Blocked page detected!")
+                    if "security" in page_source.lower():
+                        print("⚠️  Security check detected!")
+                except Exception as e:
+                    print(f"Error getting page source: {e}")
+                
                 # Try to find and fill login form
                 username_field = WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.NAME, "log"))

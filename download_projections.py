@@ -6,6 +6,7 @@ from datetime import datetime
 from curl_cffi import requests
 import pandas as pd
 from dotenv import load_dotenv
+import traceback
 
 # Load environment variables
 load_dotenv()
@@ -82,15 +83,28 @@ def verify_login(session):
 def download_projections():
     """Download FanGraphs projections using curl_cffi"""
     print("Environment variables loaded:")
-    print(f"FANGRAPHS_USERNAME: \"{os.getenv('FANGRAPHS_USERNAME')}\"")
-    print(f"FANGRAPHS_PASSWORD: \"***\"")
-    
+    fangraphs_username = os.getenv('FANGRAPHS_USERNAME')
+    fangraphs_password = os.getenv('FANGRAPHS_PASSWORD')
+    proxy_url = os.getenv('PROXY_URL')
+    print(f"FANGRAPHS_USERNAME: {repr(fangraphs_username)} (type: {type(fangraphs_username)})")
+    print(f"FANGRAPHS_PASSWORD: {'***' if fangraphs_password else None} (type: {type(fangraphs_password)})")
+    print(f"PROXY_URL: {repr(proxy_url)} (type: {type(proxy_url)})")
+    print(f"Other env: {[(k, v) for k, v in os.environ.items() if 'FANGRAPHS' in k or 'PROXY' in k]}")
+
     # Create projections directory if it doesn't exist
     os.makedirs(PROJECTIONS_DIR, exist_ok=True)
-    
+
     # Set up session with curl_cffi
     session = requests.Session()
-    
+    if proxy_url:
+        print(f"Using proxy: {proxy_url}")
+        session.proxies = {
+            'http': proxy_url,
+            'https': proxy_url
+        }
+    else:
+        print("No proxy configured.")
+
     # Configure session for better anti-bot bypass
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -101,41 +115,40 @@ def download_projections():
         'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1',
     })
-    
-    # Check if we have FanGraphs credentials
-    fangraphs_username = os.getenv('FANGRAPHS_USERNAME')
-    fangraphs_password = os.getenv('FANGRAPHS_PASSWORD')
-    
+
     if not fangraphs_username or not fangraphs_password:
+        print("Missing FanGraphs credentials!")
         raise Exception("No FanGraphs credentials available")
-    
+
     try:
         # Try to load existing cookies first
+        print("Loading cookies...")
         if load_cookies(session, COOKIES_PATH):
+            print("Cookies loaded. Verifying login...")
             if verify_login(session):
                 print("Using existing login session")
             else:
                 print("Existing cookies expired, attempting fresh login...")
-                # Clear cookies and try fresh login
                 session.cookies.clear()
         else:
             print("No existing cookies found, attempting fresh login...")
-        
+
         # Perform fresh login if needed
         if not verify_login(session):
             print("Attempting fresh login with curl_cffi...")
-            
-            # First, get the login page to extract any necessary tokens
             login_url = "https://blogs.fangraphs.com/wp-login.php?redirect_to=https://www.fangraphs.com/"
+            print(f"GET {login_url}")
             response = session.get(login_url, timeout=10)
-            
+            print(f"Login page GET status: {response.status_code}")
+            print(f"Login page headers: {dict(response.headers)}")
+            print(f"Login page cookies: {dict(response.cookies)}")
+            print(f"Cloudflare headers: {{k: v for k, v in response.headers.items() if 'cf-' in k.lower() or 'cloudflare' in k.lower()}}")
+            print(f"Login page body (first 1000 chars): {response.text[:1000]}")
+
             if response.status_code != 200:
                 print(f"Failed to load login page: {response.status_code}")
                 raise Exception("Could not load login page")
-            
-            print(f"Login page loaded successfully (status: {response.status_code})")
-            
-            # Extract nonce if present (WordPress security token)
+
             nonce = None
             if 'name="_wpnonce"' in response.text:
                 import re
@@ -143,8 +156,7 @@ def download_projections():
                 if nonce_match:
                     nonce = nonce_match.group(1)
                     print(f"Found WordPress nonce: {nonce}")
-            
-            # Prepare login data
+
             login_data = {
                 'log': fangraphs_username,
                 'pwd': fangraphs_password,
@@ -152,38 +164,29 @@ def download_projections():
                 'redirect_to': 'https://www.fangraphs.com/',
                 'testcookie': '1'
             }
-            
             if nonce:
                 login_data['_wpnonce'] = nonce
-            
-            # Submit login form
-            print("Submitting login form...")
+
+            print(f"POST {login_url} with data: {{'log': fangraphs_username, 'pwd': '***', ...}}")
             login_response = session.post(login_url, data=login_data, timeout=10)
-            
-            print(f"Login response status: {login_response.status_code}")
-            print(f"Login response URL: {login_response.url}")
-            print(f"Login response headers: {dict(login_response.headers)}")
-            print(f"Login response cookies: {dict(login_response.cookies)}")
-            print("=" * 80)
-            print("FULL LOGIN RESPONSE CONTENT:")
-            print("=" * 80)
-            print(login_response.text)
-            print("=" * 80)
-            print("END OF LOGIN RESPONSE CONTENT")
-            print("=" * 80)
-            
+            print(f"Login POST status: {login_response.status_code}")
+            print(f"Login POST headers: {dict(login_response.headers)}")
+            print(f"Login POST cookies: {dict(login_response.cookies)}")
+            print(f"Cloudflare headers: {{k: v for k, v in login_response.headers.items() if 'cf-' in k.lower() or 'cloudflare' in k.lower()}}")
+            print(f"Login POST body (first 1000 chars): {login_response.text[:1000]}")
+
             # Check if login was successful
             if verify_login(session):
                 print("Login successful!")
                 save_cookies(session, COOKIES_PATH)
             else:
                 print("Login failed - verification unsuccessful")
-                print(f"Response content preview: {login_response.text[:500]}")
+                print(f"Response content preview: {login_response.text[:1000]}")
                 raise Exception("Login failed")
-        
-        # Now download the projections
+
         print("Login successful, downloading projections...")
         
+        # Now download the projections
         # Download batters projections
         batters_url = "https://www.fangraphs.com/api/projections"
         batters_params = {
@@ -245,6 +248,7 @@ def download_projections():
         
     except Exception as e:
         print(f"Error during process: {e}")
+        print(traceback.format_exc())
         raise
 
 if __name__ == "__main__":

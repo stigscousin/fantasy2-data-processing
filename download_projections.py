@@ -269,10 +269,53 @@ def download_projections():
             batters_url = "https://www.fangraphs.com/leaders/major-league?pos=all&stats=bat&lg=all&qual=0&type=8&season=2025&month=0&season1=2025&ind=0&team=0,ts&rost=0&age=0&filter=&players=0&startdate=&enddate=&page=1_50"
             driver.get(batters_url)
             
-            # Wait for page to load and find export button
+            # Wait for page to load and take screenshot for debugging
+            print("Waiting for page to load...")
+            time.sleep(10)
+            
+            # Take screenshot for debugging
+            driver.save_screenshot("/tmp/fangraphs_page.png")
+            print("Screenshot saved to /tmp/fangraphs_page.png")
+            
+            # Print page title and URL for debugging
+            print(f"Page title: {driver.title}")
+            print(f"Current URL: {driver.current_url}")
+            
+            # Try different selectors for the export button
             wait = WebDriverWait(driver, 30)
-            export_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Export Data')]")))
-            export_button.click()
+            export_button = None
+            
+            # Try multiple selectors
+            selectors = [
+                "//button[contains(text(), 'Export Data')]",
+                "//button[contains(text(), 'Export')]",
+                "//a[contains(text(), 'Export Data')]",
+                "//a[contains(text(), 'Export')]",
+                "//button[@class='export-button']",
+                "//a[@class='export-button']",
+                "//button[contains(@class, 'export')]",
+                "//a[contains(@class, 'export')]"
+            ]
+            
+            for selector in selectors:
+                try:
+                    print(f"Trying selector: {selector}")
+                    export_button = wait.until(EC.element_to_be_clickable((By.XPATH, selector)))
+                    print(f"Found export button with selector: {selector}")
+                    break
+                except Exception as e:
+                    print(f"Selector {selector} failed: {e}")
+                    continue
+            
+            if export_button:
+                export_button.click()
+                print("Clicked export button")
+            else:
+                print("Could not find export button with any selector")
+                # Print page source for debugging
+                print("Page source preview:")
+                print(driver.page_source[:2000])
+                raise Exception("Export button not found")
             
             # Wait for download to complete
             time.sleep(5)

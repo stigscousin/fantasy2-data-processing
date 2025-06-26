@@ -8,6 +8,7 @@ import pandas as pd
 from dotenv import load_dotenv
 import traceback
 import urllib3
+from bs4 import BeautifulSoup
 
 # Load environment variables
 load_dotenv()
@@ -17,20 +18,20 @@ COOKIES_PATH = 'fangraphs_cookies.pkl'
 PROJECTIONS_DIR = 'projections'
 
 def save_cookies(session, path):
-    """Save cookies from session to file"""
+    """Save session cookies to file"""
     try:
-        # Convert curl_cffi cookies to a format we can pickle
-        cookies_to_save = []
+        cookies = []
         for cookie in session.cookies:
-            cookies_to_save.append({
+            cookies.append({
                 'name': cookie.name,
                 'value': cookie.value,
                 'domain': cookie.domain,
-                'path': cookie.path
+                'path': cookie.path,
+                'secure': cookie.secure,
+                'expires': cookie.expires
             })
-        
         with open(path, 'wb') as f:
-            pickle.dump(cookies_to_save, f)
+            pickle.dump(cookies, f)
         print(f"Cookies saved to {path}")
     except Exception as e:
         print(f"Error saving cookies: {e}")
@@ -242,6 +243,8 @@ def download_projections():
         }
         
         print("Downloading batters projections...")
+        print(f"URL: {batters_url}")
+        print(f"Params: {batters_params}")
         batters_response = session.get(batters_url, params=batters_params, timeout=30)
         
         if batters_response.status_code == 200:
@@ -252,7 +255,24 @@ def download_projections():
         else:
             print(f"Failed to download batters projections: {batters_response.status_code}")
             print(f"Response: {batters_response.text[:500]}")
-            raise Exception("Failed to download batters projections")
+            # Try alternative URL
+            alt_url = "https://www.fangraphs.com/leaders/major-league?pos=all&stats=bat&lg=all&qual=0&type=8&season=2025&month=0&season1=2025&ind=0&team=0,ts&rost=0&age=0&filter=&players=0&startdate=&enddate=&page=1_50"
+            print(f"Trying alternative URL: {alt_url}")
+            alt_response = session.get(alt_url, timeout=30)
+            if alt_response.status_code == 200:
+                print("Alternative URL successful, parsing HTML...")
+                # Parse HTML table
+                soup = BeautifulSoup(alt_response.text, 'html.parser')
+                table = soup.find('table', {'class': 'table-fixed'})
+                if table:
+                    batters_df = pd.read_html(str(table))[0]
+                    batters_path = os.path.join(PROJECTIONS_DIR, 'fangraphs-leaderboard-projections-batters.csv')
+                    batters_df.to_csv(batters_path, index=False)
+                    print(f"Batters projections saved: {batters_path} ({len(batters_df)} players)")
+                else:
+                    raise Exception("Could not find projections table in HTML")
+            else:
+                raise Exception("Failed to download batters projections")
         
         # Download pitchers projections
         pitchers_params = {

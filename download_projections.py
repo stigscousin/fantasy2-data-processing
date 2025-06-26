@@ -69,9 +69,14 @@ def verify_login(session):
             if "Log In" in response.text and "Username or Email Address" in response.text:
                 print("Login verification failed - still on login page")
                 return False
-            else:
-                print("Login verification successful - redirected away from login page")
+            elif "FanGraphs Baseball" in response.text and "Baseball Statistics and Analysis" in response.text:
+                print("Login verification successful - redirected to FanGraphs homepage")
                 return True
+            else:
+                print("Login verification unclear - checking response content")
+                print(f"Response contains 'Log In': {'Log In' in response.text}")
+                print(f"Response contains 'FanGraphs Baseball': {'FanGraphs Baseball' in response.text}")
+                return False
         else:
             print(f"Login verification failed - status code: {response.status_code}")
             return False
@@ -85,11 +90,21 @@ def download_projections():
     print("Environment variables loaded:")
     fangraphs_username = os.getenv('FANGRAPHS_USERNAME')
     fangraphs_password = os.getenv('FANGRAPHS_PASSWORD')
-    proxy_url = os.getenv('PROXY_URL')
+    brightdata_username = os.getenv('BRIGHTDATA_USERNAME')
+    brightdata_password = os.getenv('BRIGHTDATA_PASSWORD')
+    
+    # Construct proxy URL from BrightData credentials
+    proxy_url = None
+    if brightdata_username and brightdata_password:
+        proxy_url = f"http://{brightdata_username}:{brightdata_password}@brd.superproxy.io:22225"
+        print(f"Constructed proxy URL from BrightData credentials")
+    
     print(f"FANGRAPHS_USERNAME: {repr(fangraphs_username)} (type: {type(fangraphs_username)})")
     print(f"FANGRAPHS_PASSWORD: {'***' if fangraphs_password else None} (type: {type(fangraphs_password)})")
+    print(f"BRIGHTDATA_USERNAME: {repr(brightdata_username)} (type: {type(brightdata_username)})")
+    print(f"BRIGHTDATA_PASSWORD: {'***' if brightdata_password else None} (type: {type(brightdata_password)})")
     print(f"PROXY_URL: {repr(proxy_url)} (type: {type(proxy_url)})")
-    print(f"Other env: {[(k, v) for k, v in os.environ.items() if 'FANGRAPHS' in k or 'PROXY' in k]}")
+    print(f"Other env: {[(k, v) for k, v in os.environ.items() if 'FANGRAPHS' in k or 'BRIGHTDATA' in k]}")
 
     # Create projections directory if it doesn't exist
     os.makedirs(PROJECTIONS_DIR, exist_ok=True)

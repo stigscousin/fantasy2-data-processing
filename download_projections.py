@@ -9,6 +9,11 @@ from dotenv import load_dotenv
 import traceback
 import urllib3
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 
 # Load environment variables
 load_dotenv()
@@ -225,84 +230,96 @@ def download_projections():
 
         print("Login successful, downloading projections...")
         
-        # Now download the projections
-        # Download batters projections
-        batters_url = "https://www.fangraphs.com/api/projections"
-        batters_params = {
-            'type': '0',
-            'pos': 'all',
-            'stats': 'bat',
-            'qual': '0',
-            'sort': '31,d',
-            'season': '2025',
-            'team': '0,ts',
-            'rost': '0',
-            'filter': '',
-            'players': '0',
-            'pg': '0'
-        }
+        # Set up Selenium for projections download
+        chrome_options = Options()
+        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--window-size=1920,1080')
         
-        print("Downloading batters projections...")
-        print(f"URL: {batters_url}")
-        print(f"Params: {batters_params}")
-        batters_response = session.get(batters_url, params=batters_params, timeout=30)
+        # Add proxy if configured
+        if proxy_url:
+            chrome_options.add_argument(f'--proxy-server={proxy_url}')
         
-        if batters_response.status_code == 200:
-            batters_df = pd.read_csv(batters_response.content)
-            batters_path = os.path.join(PROJECTIONS_DIR, 'fangraphs-leaderboard-projections-batters.csv')
-            batters_df.to_csv(batters_path, index=False)
-            print(f"Batters projections saved: {batters_path} ({len(batters_df)} players)")
-        else:
-            print(f"Failed to download batters projections: {batters_response.status_code}")
-            print(f"Response: {batters_response.text[:500]}")
-            # Try alternative URL
-            alt_url = "https://www.fangraphs.com/leaders/major-league?pos=all&stats=bat&lg=all&qual=0&type=8&season=2025&month=0&season1=2025&ind=0&team=0,ts&rost=0&age=0&filter=&players=0&startdate=&enddate=&page=1_50"
-            print(f"Trying alternative URL: {alt_url}")
-            alt_response = session.get(alt_url, timeout=30)
-            if alt_response.status_code == 200:
-                print("Alternative URL successful, parsing HTML...")
-                # Parse HTML table
-                soup = BeautifulSoup(alt_response.text, 'html.parser')
-                table = soup.find('table', {'class': 'table-fixed'})
-                if table:
-                    batters_df = pd.read_html(str(table))[0]
-                    batters_path = os.path.join(PROJECTIONS_DIR, 'fangraphs-leaderboard-projections-batters.csv')
-                    batters_df.to_csv(batters_path, index=False)
-                    print(f"Batters projections saved: {batters_path} ({len(batters_df)} players)")
-                else:
-                    raise Exception("Could not find projections table in HTML")
+        driver = webdriver.Chrome(options=chrome_options)
+        
+        try:
+            # Transfer cookies from curl_cffi session to Selenium
+            print("Transferring cookies to Selenium...")
+            driver.get("https://www.fangraphs.com")
+            for cookie in session.cookies:
+                try:
+                    driver.add_cookie({
+                        'name': cookie.name,
+                        'value': cookie.value,
+                        'domain': cookie.domain,
+                        'path': cookie.path,
+                        'secure': cookie.secure
+                    })
+                except Exception as e:
+                    print(f"Error adding cookie {cookie.name}: {e}")
+            
+            # Download batters projections
+            print("Downloading batters projections...")
+            batters_url = "https://www.fangraphs.com/leaders/major-league?pos=all&stats=bat&lg=all&qual=0&type=8&season=2025&month=0&season1=2025&ind=0&team=0,ts&rost=0&age=0&filter=&players=0&startdate=&enddate=&page=1_50"
+            driver.get(batters_url)
+            
+            # Wait for page to load and find export button
+            wait = WebDriverWait(driver, 30)
+            export_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Export Data')]")))
+            export_button.click()
+            
+            # Wait for download to complete
+            time.sleep(5)
+            
+            # Check if file was downloaded
+            downloads_dir = Path.home() / "Downloads"
+            batters_file = None
+            for file in downloads_dir.glob("*.csv"):
+                if "fangraphs" in file.name.lower() and "bat" in file.name.lower():
+                    batters_file = file
+                    break
+            
+            if batters_file:
+                # Move to projections directory
+                batters_path = os.path.join(PROJECTIONS_DIR, 'fangraphs-leaderboard-projections-batters.csv')
+                batters_file.rename(batters_path)
+                print(f"Batters projections saved: {batters_path}")
             else:
-                raise Exception("Failed to download batters projections")
-        
-        # Download pitchers projections
-        pitchers_params = {
-            'type': '0',
-            'pos': 'all',
-            'stats': 'pit',
-            'qual': '0',
-            'sort': '31,d',
-            'season': '2025',
-            'team': '0,ts',
-            'rost': '0',
-            'filter': '',
-            'players': '0',
-            'pg': '0'
-        }
-        
-        print("Downloading pitchers projections...")
-        pitchers_response = session.get(batters_url, params=pitchers_params, timeout=30)
-        
-        if pitchers_response.status_code == 200:
-            pitchers_df = pd.read_csv(pitchers_response.content)
-            pitchers_path = os.path.join(PROJECTIONS_DIR, 'fangraphs-leaderboard-projections-pitchers.csv')
-            pitchers_df.to_csv(pitchers_path, index=False)
-            print(f"Pitchers projections saved: {pitchers_path} ({len(pitchers_df)} players)")
-        else:
-            print(f"Failed to download pitchers projections: {pitchers_response.status_code}")
-            print(f"Response: {pitchers_response.text[:500]}")
-            raise Exception("Failed to download pitchers projections")
-        
-        print("All projections downloaded successfully!")
+                print("Batters projections file not found in downloads")
+            
+            # Download pitchers projections
+            print("Downloading pitchers projections...")
+            pitchers_url = "https://www.fangraphs.com/leaders/major-league?pos=all&stats=pit&lg=all&qual=0&type=8&season=2025&month=0&season1=2025&ind=0&team=0,ts&rost=0&age=0&filter=&players=0&startdate=&enddate=&page=1_50"
+            driver.get(pitchers_url)
+            
+            # Wait for page to load and find export button
+            export_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Export Data')]")))
+            export_button.click()
+            
+            # Wait for download to complete
+            time.sleep(5)
+            
+            # Check if file was downloaded
+            pitchers_file = None
+            for file in downloads_dir.glob("*.csv"):
+                if "fangraphs" in file.name.lower() and "pit" in file.name.lower():
+                    pitchers_file = file
+                    break
+            
+            if pitchers_file:
+                # Move to projections directory
+                pitchers_path = os.path.join(PROJECTIONS_DIR, 'fangraphs-leaderboard-projections-pitchers.csv')
+                pitchers_file.rename(pitchers_path)
+                print(f"Pitchers projections saved: {pitchers_path}")
+            else:
+                print("Pitchers projections file not found in downloads")
+            
+            print("All projections downloaded successfully!")
+            
+        finally:
+            driver.quit()
         
     except Exception as e:
         print(f"Error during process: {e}")

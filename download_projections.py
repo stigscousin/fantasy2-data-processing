@@ -212,92 +212,57 @@ def download_projections():
         fangraphs_username = os.getenv('FANGRAPHS_USERNAME')
         fangraphs_password = os.getenv('FANGRAPHS_PASSWORD')
         
-        if not os.path.exists(COOKIES_PATH):
-            if fangraphs_username and fangraphs_password:
-                print("Attempting automated login with environment credentials...")
+        # Always attempt fresh login - skip cookie loading
+        if fangraphs_username and fangraphs_password:
+            print("Attempting fresh login with environment credentials...")
+            try:
+                # Navigate to the WordPress login page
+                driver.get("https://blogs.fangraphs.com/wp-login.php?redirect_to=https://www.fangraphs.com/")
+                time.sleep(3)
+                
+                # Debug: Print current URL and page title
+                print(f"Current URL: {driver.current_url}")
+                print(f"Page title: {driver.title}")
+                
+                # Debug: Check if we can find any form elements
                 try:
-                    # Navigate to the WordPress login page
-                    driver.get("https://blogs.fangraphs.com/wp-login.php?redirect_to=https://www.fangraphs.com/")
-                    time.sleep(3)
-                    
-                    # Try to find and fill login form with WordPress field names
-                    username_field = WebDriverWait(driver, 10).until(
-                        EC.presence_of_element_located((By.NAME, "log"))
-                    )
-                    password_field = driver.find_element(By.NAME, "pwd")
-                    
-                    username_field.send_keys(fangraphs_username)
-                    password_field.send_keys(fangraphs_password)
-                    
-                    # Find and click login button
-                    login_button = driver.find_element(By.CSS_SELECTOR, "input[type='submit']")
-                    login_button.click()
-                    
-                    time.sleep(5)
-                    
-                    # Check if login was successful
-                    if verify_login(driver):
-                        print("Automated login successful!")
-                        save_cookies(driver, COOKIES_PATH)
-                    else:
-                        print("Automated login failed. Please check credentials.")
-                        raise Exception("Login failed")
-                        
+                    forms = driver.find_elements(By.TAG_NAME, "form")
+                    print(f"Found {len(forms)} form(s) on the page")
+                    for i, form in enumerate(forms):
+                        print(f"Form {i}: action='{form.get_attribute('action')}', method='{form.get_attribute('method')}'")
                 except Exception as e:
-                    print(f"Automated login failed: {str(e)}")
-                    print("Falling back to manual login...")
-                    print("Please log in manually in the opened browser window.")
-                    print("After logging in, press Enter here to continue...")
-                    input()
+                    print(f"Error finding forms: {e}")
+                
+                # Try to find and fill login form
+                username_field = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.NAME, "log"))
+                )
+                password_field = driver.find_element(By.NAME, "pwd")
+                
+                username_field.send_keys(fangraphs_username)
+                password_field.send_keys(fangraphs_password)
+                
+                # Submit the form
+                submit_button = driver.find_element(By.ID, "wp-submit")
+                submit_button.click()
+                
+                time.sleep(5)
+                
+                # Verify login was successful
+                if verify_login(driver):
+                    print("Automated login successful!")
                     save_cookies(driver, COOKIES_PATH)
-                    print("Cookies saved. You should not need to log in manually next time.")
-            else:
-                print("No cookies found and no FanGraphs credentials in environment variables.")
-                print("Please log in manually in the opened browser window.")
-                print("After logging in, press Enter here to continue...")
-                input()
-                save_cookies(driver, COOKIES_PATH)
-                print("Cookies saved. You should not need to log in manually next time.")
-        else:
-            print("Loading cookies from file...")
-            load_cookies(driver, COOKIES_PATH)
-            driver.refresh()
-            time.sleep(3)
-            
-            # Verify login is still valid
-            if not verify_login(driver):
-                print("Cookies expired. Attempting re-login...")
-                if fangraphs_username and fangraphs_password:
-                    try:
-                        # Navigate to the WordPress login page for re-login
-                        driver.get("https://blogs.fangraphs.com/wp-login.php?redirect_to=https://www.fangraphs.com/")
-                        time.sleep(3)
-                        
-                        # Try automated re-login with WordPress field names
-                        username_field = WebDriverWait(driver, 10).until(
-                            EC.presence_of_element_located((By.NAME, "log"))
-                        )
-                        password_field = driver.find_element(By.NAME, "pwd")
-                        
-                        username_field.send_keys(fangraphs_username)
-                        password_field.send_keys(fangraphs_password)
-                        
-                        login_button = driver.find_element(By.CSS_SELECTOR, "input[type='submit']")
-                        login_button.click()
-                        
-                        time.sleep(5)
-                        
-                        if verify_login(driver):
-                            print("Re-login successful!")
-                            save_cookies(driver, COOKIES_PATH)
-                        else:
-                            raise Exception("Re-login failed")
-                    except Exception as e:
-                        print(f"Automated re-login failed: {str(e)}")
-                        raise Exception("Login required but no interactive session available")
                 else:
-                    raise Exception("Login required but no credentials available")
-            
+                    print("Automated login failed - login verification failed")
+                    raise Exception("Login verification failed")
+                    
+            except Exception as e:
+                print(f"Automated login failed: {e}")
+                raise Exception("Automated login failed")
+        else:
+            print("No FanGraphs credentials found in environment variables")
+            raise Exception("No FanGraphs credentials available")
+        
         # Now continue as if logged in
         print("Navigating to projections page...")
         driver.get('https://www.fangraphs.com/projections?pos=all&stats=bat&type=ratcdc')

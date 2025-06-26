@@ -58,19 +58,23 @@ def load_cookies(session, path):
 def verify_login(session):
     """Verify if we're logged in by checking for member indicators"""
     try:
-        # Try to access a page that requires login
-        response = session.get("https://www.fangraphs.com/", timeout=10)
+        # Try to access the login page to see if we're already logged in
+        login_url = "https://blogs.fangraphs.com/wp-login.php?redirect_to=https://www.fangraphs.com/"
+        response = session.get(login_url, timeout=10)
+        
         if response.status_code == 200:
-            # Check for login indicators in the response
-            if "fg_is_member" in response.text or "logout" in response.text.lower():
-                print("Login verification successful")
-                return True
-            else:
-                print("Login verification failed - no member indicators found")
+            # If we're logged in, we should be redirected away from the login page
+            # Check if we're still on the login page (which means we're not logged in)
+            if "Log In" in response.text and "Username or Email Address" in response.text:
+                print("Login verification failed - still on login page")
                 return False
+            else:
+                print("Login verification successful - redirected away from login page")
+                return True
         else:
             print(f"Login verification failed - status code: {response.status_code}")
             return False
+            
     except Exception as e:
         print(f"Login verification error: {e}")
         return False

@@ -158,6 +158,15 @@ def download_projections():
             
             print(f"Login response status: {login_response.status_code}")
             print(f"Login response URL: {login_response.url}")
+            print(f"Login response headers: {dict(login_response.headers)}")
+            print(f"Login response cookies: {dict(login_response.cookies)}")
+            print("=" * 80)
+            print("FULL LOGIN RESPONSE CONTENT:")
+            print("=" * 80)
+            print(login_response.text)
+            print("=" * 80)
+            print("END OF LOGIN RESPONSE CONTENT")
+            print("=" * 80)
             
             # Check if login was successful
             if verify_login(session):

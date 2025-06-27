@@ -91,7 +91,7 @@ def update_data():
                 logger.warning(f"Failed to complete {description}. Checking for existing projection files...")
                 
                 # Check if we have existing projection files to use as fallback
-                existing_batters = Path('projections/fangraphs-leaderboard-projections-hitters.csv')
+                existing_batters = Path('projections/fangraphs-leaderboard-projections-batters.csv')
                 existing_pitchers = Path('projections/fangraphs-leaderboard-projections-pitchers.csv')
                 
                 if existing_batters.exists() and existing_pitchers.exists():

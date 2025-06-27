@@ -3,7 +3,7 @@ load_dotenv()
 import pandas as pd
 from pathlib import Path
 import re
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import os
 
 def truncate_repeated_name(name):
@@ -26,16 +26,24 @@ def main():
     if db_url.startswith('postgres://'):
         db_url = db_url.replace('postgres://', 'postgresql://', 1)
     engine = create_engine(db_url)
-    df = pd.read_sql('SELECT rowid, team_name FROM team_stats', engine)
+    
+    # Get all team names from the database
+    df = pd.read_sql('SELECT DISTINCT team_name FROM team_stats', engine)
     
     cleaned = []
     for idx, row in df.iterrows():
-        cleaned_name = truncate_repeated_name(row['team_name'])
-        cleaned.append((cleaned_name, row['rowid']))
+        original_name = row['team_name']
+        cleaned_name = truncate_repeated_name(original_name)
+        if cleaned_name != original_name:
+            cleaned.append((cleaned_name, original_name))
     
-    # Update the table
-    for name, rowid in cleaned:
-        engine.execute('UPDATE team_stats SET team_name = %s WHERE rowid = %s', (name, rowid))
+    # Update the table using the team_name as the identifier
+    with engine.connect() as conn:
+        for new_name, old_name in cleaned:
+            conn.execute(text('UPDATE team_stats SET team_name = :new_name WHERE team_name = :old_name'), 
+                        {'new_name': new_name, 'old_name': old_name})
+        conn.commit()
+    
     print(f"Cleaned {len(cleaned)} team names.")
 
 if __name__ == "__main__":

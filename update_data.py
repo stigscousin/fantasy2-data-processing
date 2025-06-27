@@ -86,33 +86,8 @@ def update_data():
     # Run each script in sequence
     for script, description in scripts:
         if not run_script(script, description):
-            # Special handling for FanGraphs projections download failure
-            if script == 'download_projections.py':
-                logger.warning(f"Failed to complete {description}. Checking for existing projection files...")
-                
-                # Check if we have existing projection files to use as fallback
-                existing_batters = Path('projections/fangraphs-leaderboard-projections-batters.csv')
-                existing_pitchers = Path('projections/fangraphs-leaderboard-projections-pitchers.csv')
-                
-                if existing_batters.exists() and existing_pitchers.exists():
-                    logger.info("Found existing projection files. Using them as fallback.")
-                    # Copy existing files to the expected names if they don't match
-                    import shutil
-                    if not batters_path.exists():
-                        shutil.copy2(existing_batters, batters_path)
-                        logger.info(f"Copied {existing_batters} to {batters_path}")
-                    if not pitchers_path.exists():
-                        shutil.copy2(existing_pitchers, pitchers_path)
-                        logger.info(f"Copied {existing_pitchers} to {pitchers_path}")
-                    
-                    # Continue with the rest of the process
-                    logger.info("Continuing with existing projection files...")
-                else:
-                    logger.error("No existing projection files found. Stopping update process.")
-                    return False
-            else:
-                logger.error(f"Failed to complete {description}. Stopping update process.")
-                return False
+            logger.error(f"Failed to complete {description}. Stopping update process.")
+            return False
     
     end_time = datetime.now()
     duration = end_time - start_time

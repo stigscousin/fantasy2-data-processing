@@ -55,24 +55,23 @@ def update_data():
     os.makedirs('data', exist_ok=True)
     
     # Check if FanGraphs projections were downloaded in the last 12 hours
-    # batters_path = Path('projections/fangraphs-leaderboard-projections-batters.csv')
-    # pitchers_path = Path('projections/fangraphs-leaderboard-projections-pitchers.csv')
-    # now = datetime.now().timestamp()
-    # skip_fangraphs = False
-    # if batters_path.exists() and pitchers_path.exists():
-    #     batters_age = now - batters_path.stat().st_mtime
-    #     pitchers_age = now - pitchers_path.stat().st_mtime
-    #     if batters_age < 12 * 3600 and pitchers_age < 12 * 3600:
-    #         skip_fangraphs = True
-    #         logger.info("FanGraphs projections are less than 12 hours old. Skipping download.")
+    batters_path = Path('projections/fangraphs-leaderboard-projections-batters.csv')
+    pitchers_path = Path('projections/fangraphs-leaderboard-projections-pitchers.csv')
+    now = datetime.now().timestamp()
+    skip_fangraphs = False
+    if batters_path.exists() and pitchers_path.exists():
+        batters_age = now - batters_path.stat().st_mtime
+        pitchers_age = now - pitchers_path.stat().st_mtime
+        if batters_age < 12 * 3600 and pitchers_age < 12 * 3600:
+            skip_fangraphs = True
+            logger.info("FanGraphs projections are less than 12 hours old. Skipping download.")
     
     # Define the sequence of scripts to run
     scripts = [
         ('src/fetch_espn_stats.py', 'ESPN stats fetch'),
-        ('download_projections.py', 'FanGraphs projections download'),
     ]
-    # if not skip_fangraphs:
-    #     scripts.append(('download_projections.py', 'FanGraphs projections download'))
+    if not skip_fangraphs:
+        scripts.append(('download_projections.py', 'FanGraphs projections download'))
     scripts += [
         ('baseball_stats.py', 'Baseball Reference and Statcast data fetch'),
         ('src/merge_xwoba.py', 'xwOBA data merge'),

@@ -103,7 +103,7 @@ def download_projections():
     # Construct proxy URL from BrightData credentials
     proxy_url = None
     if brightdata_username and brightdata_password:
-        # Try datacenter proxies first (no KYC required)
+        # Use datacenter proxies (no KYC required) instead of residential
         proxy_url = f"http://{brightdata_username}:{brightdata_password}@brd.superproxy.io:22225"
         print(f"Constructed proxy URL from BrightData credentials (datacenter)")
     else:

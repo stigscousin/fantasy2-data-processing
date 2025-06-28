@@ -59,12 +59,16 @@ def update_data():
     pitchers_path = Path('projections/fangraphs-leaderboard-projections-pitchers.csv')
     now = datetime.now().timestamp()
     skip_fangraphs = False
-    if batters_path.exists() and pitchers_path.exists():
-        batters_age = now - batters_path.stat().st_mtime
-        pitchers_age = now - pitchers_path.stat().st_mtime
-        if batters_age < 12 * 3600 and pitchers_age < 12 * 3600:
-            skip_fangraphs = True
-            logger.info("FanGraphs projections are less than 12 hours old. Skipping download.")
+    # if batters_path.exists() and pitchers_path.exists():
+    #     batters_age = now - batters_path.stat().st_mtime
+    #     pitchers_age = now - pitchers_path.stat().st_mtime
+    #     if batters_age < 12 * 3600 and pitchers_age < 12 * 3600:
+    #         skip_fangraphs = True
+    #         logger.info("FanGraphs projections are less than 12 hours old. Skipping download.")
+    
+    # For testing: always run projections download
+    skip_fangraphs = False
+    logger.info("Bypass logic commented out for testing - will always download projections")
     
     # Define the sequence of scripts to run
     scripts = [

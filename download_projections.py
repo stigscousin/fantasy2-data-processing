@@ -154,15 +154,37 @@ def download_projections():
             # 4. Go to batters projections page
             print("Navigating to batters projections page...")
             batters_url = "https://www.fangraphs.com/projections?pos=all&stats=bat&type=ratcdc"
+            print(f"Target URL: {batters_url}")
+            print(f"Current URL before navigation: {driver.current_url}")
+            
             driver.get(batters_url)
+            print(f"Current URL immediately after navigation: {driver.current_url}")
+            
             print("Waiting for batters page to load...")
             wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
             
             # Debug: Print page info
-            print(f"Current URL: {driver.current_url}")
+            print(f"Current URL after wait: {driver.current_url}")
             print(f"Page title: {driver.title}")
+            print(f"Page source length: {len(driver.page_source)}")
             print("Page source preview:")
             print(driver.page_source[:2000])
+            
+            # Check if we're still on the login page or homepage
+            if "wp-login.php" in driver.current_url:
+                print("ERROR: Still on login page - login may have failed")
+                raise Exception("Still on login page after navigation")
+            elif driver.current_url == "https://www.fangraphs.com/":
+                print("ERROR: Redirected to homepage - may need additional authentication")
+                raise Exception("Redirected to homepage instead of projections page")
+            elif "projections" not in driver.current_url:
+                print(f"WARNING: Not on projections page. Current URL: {driver.current_url}")
+            
+            # Wait a bit more for any dynamic content to load
+            print("Waiting additional time for page content to load...")
+            time.sleep(5)
+            print(f"Final URL after additional wait: {driver.current_url}")
+            print(f"Final page title: {driver.title}")
 
             # 5. Find and click export button with multiple selectors
             print("Looking for export button...")
@@ -215,14 +237,37 @@ def download_projections():
             # 7. Repeat for pitchers
             print("Navigating to pitchers projections page...")
             pitchers_url = "https://www.fangraphs.com/projections?type=ratcdc&stats=pit"
+            print(f"Target URL: {pitchers_url}")
+            print(f"Current URL before navigation: {driver.current_url}")
+            
             driver.get(pitchers_url)
+            print(f"Current URL immediately after navigation: {driver.current_url}")
+            
             print("Waiting for pitchers page to load...")
             wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
             
             # Debug: Print page info
-            print(f"Current URL: {driver.current_url}")
+            print(f"Current URL after wait: {driver.current_url}")
             print(f"Page title: {driver.title}")
+            print(f"Page source length: {len(driver.page_source)}")
             
+            # Check if we're still on the login page or homepage
+            if "wp-login.php" in driver.current_url:
+                print("ERROR: Still on login page - login may have failed")
+                raise Exception("Still on login page after navigation")
+            elif driver.current_url == "https://www.fangraphs.com/":
+                print("ERROR: Redirected to homepage - may need additional authentication")
+                raise Exception("Redirected to homepage instead of projections page")
+            elif "projections" not in driver.current_url:
+                print(f"WARNING: Not on projections page. Current URL: {driver.current_url}")
+            
+            # Wait a bit more for any dynamic content to load
+            print("Waiting additional time for page content to load...")
+            time.sleep(5)
+            print(f"Final URL after additional wait: {driver.current_url}")
+            print(f"Final page title: {driver.title}")
+
+            # 8. Find and click export button with multiple selectors
             print("Looking for export button...")
             export_button = None
             
